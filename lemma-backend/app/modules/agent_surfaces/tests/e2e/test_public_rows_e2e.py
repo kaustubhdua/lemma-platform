@@ -244,6 +244,40 @@ async def test_an_invalid_first_row_does_not_create_a_visitor_session(
     assert sessions.scalars().all() == []
 
 
+async def test_a_rate_limited_first_row_does_not_create_a_visitor_session(
+    authenticated_client: AsyncClient,
+    db_session: AsyncSession,
+    test_pod,
+    monkeypatch,
+):
+    from app.modules.agent_surfaces.api import controllers as controllers_pkg
+    from app.modules.agent_surfaces.services import web_chat as web_chat_module
+
+    pod_id = test_pod["id"]
+    table = await _signups(authenticated_client, pod_id, "rate_limited_first_write")
+    assert (await _open(authenticated_client, pod_id, table)).status_code == 200
+    widget = await _widget(authenticated_client, pod_id, name="Rate limited first write door")
+    key = widget["public_key"]
+
+    async def deny_submission(self, *, widget_id, address):
+        return False
+
+    monkeypatch.setattr(web_chat_module.WebWidgetLimiter, "allow_submission", deny_submission)
+    rejected = await authenticated_client.post(
+        f"/public/web/{key}/rows",
+        json={"table": table, "values": {"full_name": "Ana"}},
+        headers=_page(),
+    )
+    assert rejected.status_code == 429, rejected.text
+    assert rejected.json()["code"] == "rate_limited"
+
+    db_session.expire_all()
+    sessions = await db_session.execute(
+        select(VisitorSessionModel).where(VisitorSessionModel.widget_id == UUID(widget["id"]))
+    )
+    assert sessions.scalars().all() == []
+
+
 async def test_a_contacts_only_table_refuses_a_first_write_without_a_session(
     authenticated_client: AsyncClient, test_pod
 ):
