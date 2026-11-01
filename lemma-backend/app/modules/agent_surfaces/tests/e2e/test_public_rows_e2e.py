@@ -218,6 +218,32 @@ async def test_a_first_anonymous_row_opens_a_contact_and_keeps_the_same_visitor(
     assert await _contact_of(db_session, conversation_id) == contact_id
 
 
+async def test_an_invalid_first_row_does_not_create_a_visitor_session(
+    authenticated_client: AsyncClient,
+    db_session: AsyncSession,
+    test_pod,
+):
+    pod_id = test_pod["id"]
+    table = await _signups(authenticated_client, pod_id, "invalid_first_write")
+    assert (await _open(authenticated_client, pod_id, table)).status_code == 200
+    widget = await _widget(authenticated_client, pod_id, name="Invalid first write door")
+    key = widget["public_key"]
+
+    rejected = await authenticated_client.post(
+        f"/public/web/{key}/rows",
+        json={"table": table, "values": {"work_email": "ana@example.test"}},
+        headers=_page(),
+    )
+    assert rejected.status_code == 422, rejected.text
+    assert rejected.json()["code"] == "bad_answer"
+
+    db_session.expire_all()
+    sessions = await db_session.execute(
+        select(VisitorSessionModel).where(VisitorSessionModel.widget_id == UUID(widget["id"]))
+    )
+    assert sessions.scalars().all() == []
+
+
 async def test_a_contacts_only_table_refuses_a_first_write_without_a_session(
     authenticated_client: AsyncClient, test_pod
 ):
