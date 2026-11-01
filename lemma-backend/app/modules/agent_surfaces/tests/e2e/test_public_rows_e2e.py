@@ -15,6 +15,7 @@ from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.infrastructure.db.uow_factory import SessionUnitOfWorkFactory
@@ -250,9 +251,6 @@ async def test_a_rate_limited_first_row_does_not_create_a_visitor_session(
     test_pod,
     monkeypatch,
 ):
-    from app.modules.agent_surfaces.api import controllers as controllers_pkg
-    from app.modules.agent_surfaces.services import web_chat as web_chat_module
-
     pod_id = test_pod["id"]
     table = await _signups(authenticated_client, pod_id, "rate_limited_first_write")
     assert (await _open(authenticated_client, pod_id, table)).status_code == 200
@@ -262,7 +260,10 @@ async def test_a_rate_limited_first_row_does_not_create_a_visitor_session(
     async def deny_submission(self, *, widget_id, address):
         return False
 
-    monkeypatch.setattr(web_chat_module.WebWidgetLimiter, "allow_submission", deny_submission)
+    from app.modules.agent_surfaces.api.dependencies import web_chat
+
+    chat = web_chat()
+    monkeypatch.setattr(chat.limiter, "allow_submission", deny_submission)
     rejected = await authenticated_client.post(
         f"/public/web/{key}/rows",
         json={"table": table, "values": {"full_name": "Ana"}},
