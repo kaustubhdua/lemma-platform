@@ -103,6 +103,14 @@ def test_init_pod_creates_parsable_bundle(tmp_path: Path):
         "AGENTS.md",
     } <= names
 
+    root = tmp_path / "demo"
+    readme_text = (root / "README.md").read_text(encoding="utf-8")
+    assert "lemma auth login" in readme_text
+    assert "lemma orgs select --save-default" in readme_text
+    assert "lemma pods select --save-default" in readme_text
+    assert "lemma pods import ./demo-ops --dry-run" in readme_text
+    assert "lemma pods import ./demo-ops" in readme_text
+
     # Every scaffolded JSON parses as JSONC and matches the folder==name rule.
     root = tmp_path / "demo"
     assert load_resource_payload(root / "tables" / "items", "items")["name"] == "items"
