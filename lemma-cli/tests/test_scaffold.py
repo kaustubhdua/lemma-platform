@@ -115,6 +115,23 @@ def test_init_pod_creates_parsable_bundle(tmp_path: Path):
     assert isinstance(agent["instruction"], str) and agent["instruction"].strip()
 
 
+def test_init_pod_without_starter_creates_bare_bundle(tmp_path: Path):
+    root = tmp_path / "bare"
+    result = init_pod(root, "Bare Pod", with_starter=False)
+
+    assert result.name == "bare-pod"
+    assert {path.name for path in result.files} == {
+        "pod.json",
+        "README.md",
+        "AGENTS.md",
+    }
+    assert (root / "pod.json").is_file()
+    assert (root / "README.md").is_file()
+    assert (root / "AGENTS.md").is_file()
+    assert not (root / "tables").exists()
+    assert not (root / "agents").exists()
+
+
 def test_init_pod_refuses_existing_without_force(tmp_path: Path):
     init_pod(tmp_path / "demo", "demo")
     with pytest.raises(ScaffoldError):
